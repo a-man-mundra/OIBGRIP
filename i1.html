@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Link Extractor</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #f2f6fc;
+            margin: 0;
+            padding: 0;
+            text-align: center;
+        }
+        header {
+            background-color: #4a90e2;
+            color: white;
+            padding: 20px;
+            font-size: 24px;
+        }
+        .container {
+            padding: 20px;
+        }
+        input[type="file"], button {
+            margin: 10px;
+        }
+        .link-box {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+            padding: 15px;
+            margin: 10px auto;
+            width: 90%;
+            max-width: 700px;
+            text-align: left;
+        }
+        .link-box a {
+            color: #1a73e8;
+            text-decoration: none;
+            margin-right: 10px;
+        }
+        .visit-btn {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <header>🖼️ Web Image Link Extractor</header>
+    <div class="container">
+        <input type="file" accept="image/*" id="imageInput">
+        <button onclick="captureScreen()">📸 Capture Screen</button>
+        <canvas id="screencanvas" style="display:none;"></canvas>
+        <div id="linksContainer"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.0/dist/tesseract.min.js"></script>
+    <script>
+        const imageInput = document.getElementById('imageInput');
+        const linksContainer = document.getElementById('linksContainer');
+
+        function extractLinks(text) {
+            const regex = /(https?:\/\/\S+|http?:\/\/\S+|\b\S+\.\S+\b)/g;
+            return [...new Set(text.match(regex))];
+        }
+
+        function displayLinks(links) {
+            linksContainer.innerHTML = '';
+
+            if (!links || links.length === 0) {
+                linksContainer.innerHTML = '<p>No valid links found.</p>';
+                return;
+            }
+
+            links.forEach(link => {
+                const div = document.createElement('div');
+                div.className = 'link-box';
+
+                const a = document.createElement('a');
+                a.href = link.startsWith('http') ? link : 'http://' + link;
+                a.textContent = link;
+                a.target = '_blank';
+
+                const btn = document.createElement('button');
+                btn.className = 'visit-btn';
+                btn.textContent = 'Visit';
+                btn.onclick = () => window.open(a.href, '_blank');
+
+                div.appendChild(a);
+                div.appendChild(btn);
+                linksContainer.appendChild(div);
+            });
+        }
+
+        function processImage(image) {
+            Tesseract.recognize(image, 'eng', {
+                logger: m => console.log(m)
+            })
+            .then(({ data: { text } }) => {
+                const links = extractLinks(text);
+                displayLinks(links);
+            })
+            .catch(error => {
+                linksContainer.innerHTML = `<p style="color:red;">Error: ${error.message}</p>`;
+            });
+        }
+
+        imageInput.addEventListener('change', () => {
+            const file = imageInput.files[0];
+            if (file) {
+                processImage(file);
+            }
+        });
+
+        async function captureScreen() {
+            try {
+                const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+                const video = document.createElement('video');
+                video.srcObject = stream;
+                await video.play();
+
+                const canvas = document.getElementById('screencanvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                const ctx = canvas.getContext('2d');
+
+                // Allow video to render before capturing frame
+                setTimeout(() => {
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    stream.getTracks().forEach(track => track.stop());
+                    video.remove();
+                    canvas.toBlob(blob => {
+                        processImage(blob);
+                    });
+                }, 1000);
+            } catch (err) {
+                alert("Failed to capture screen: " + err.message);
+            }
+        }
+    </script>
+</body>
+</html>
